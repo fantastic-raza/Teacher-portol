@@ -365,7 +365,8 @@
     <div class="card-head">Auto-Calculated Result</div>
     <div id="reviewResult"></div>
   </div>
-  <button class="btn-primary" onclick="submitData()">✓ Submit Entry</button>
+  <button class="btn-sec" style="margin-bottom:0" onclick="testConnection()">Test Connection First</button>
+  <button class="btn-primary" onclick="submitData()">Submit Entry</button>
   <button class="btn-sec" onclick="goTo(3)">← Edit Marks</button>
 </div>
 
@@ -555,40 +556,91 @@ function buildReview() {
 // Apps Script Web App URL
 const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwA6O0cK0bqoWp5PwMNaVDWTpysaB9wrJot5nn8HBrX1SVOTUCHga06rvUJVx34IoNo4w/exec';
 
+function testConnection() {
+  const btn = event.target;
+  btn.textContent = 'Testing...';
+  btn.disabled = true;
+
+  // Open URL directly in new tab — user can see exact response
+  const testUrl = WEB_APP_URL + '?test=1';
+  window.open(testUrl, '_blank');
+
+  // Also log what we'd send
+  const allData = collectAllData();
+  console.log('=== DATA TO BE SENT ===');
+  console.log('Class:', allData.class);
+  console.log('Student:', allData.studentName);
+  console.log('subjectOrder:', JSON.stringify(allData.subjectOrder));
+  console.log('marks keys:', Object.keys(allData.marks || {}));
+  console.log('Full payload size:', JSON.stringify(allData).length, 'bytes');
+  alert('Check browser console (F12) to see what data will be sent.\nA new tab opened to test the server connection.\nYou should see: {"status":"ok","msg":"Server is running OK"}');
+
+  btn.textContent = 'Test Connection First';
+  btn.disabled = false;
+}
+
 function submitData() {
   const name = document.getElementById('stuName').value || 'Student';
   const btn = document.querySelector('#screen4 .btn-primary');
   btn.disabled = true;
-  btn.textContent = 'Submitting...';
+  btn.textContent = 'Saving...';
 
-  const payload = JSON.stringify(collectAllData());
+  const allData = collectAllData();
+  const payload = JSON.stringify(allData);
 
-  // Step 1: Try fetch with no-cors (fire and forget)
-  // Step 2: Simultaneously verify with a GET ping after 3s
-  // This is the most reliable method for Google Apps Script
+  console.log('Sending payload size:', payload.length, 'bytes');
+  console.log('Class:', allData.class);
+  console.log('subjectOrder:', allData.subjectOrder);
 
-  // Send data via fetch no-cors
-  fetch(WEB_APP_URL, {
-    method: 'POST',
-    mode: 'no-cors',
-    body: new URLSearchParams({ data: payload })
-  }).catch(function(){});
+  // Use hidden form POST — most reliable for Apps Script, no CORS, no URL length limit
+  const iframe = document.createElement('iframe');
+  iframe.name = 'submit_frame_' + Date.now();
+  iframe.style.cssText = 'display:none;width:0;height:0;border:0';
+  document.body.appendChild(iframe);
 
-  // Also send via GET with data encoded in URL (backup method)
-  // Apps Script doGet can also save data
-  const getUrl = WEB_APP_URL + '?data=' + encodeURIComponent(payload);
-  fetch(getUrl, { mode: 'no-cors' }).catch(function(){});
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = WEB_APP_URL;
+  form.target = iframe.name;
+  form.style.display = 'none';
+  form.enctype = 'application/x-www-form-urlencoded';
 
-  // Wait 4 seconds then show success
-  // (no-cors means we can't confirm, but one of the two methods will work)
-  setTimeout(function() {
-    document.getElementById('successName').textContent = name + ' - Class ' + selectedClass;
+  const input = document.createElement('input');
+  input.type = 'hidden';
+  input.name = 'data';
+  input.value = payload;
+  form.appendChild(input);
+  document.body.appendChild(form);
+
+  let done = false;
+
+  iframe.onload = function() {
+    if (done) return;
+    done = true;
+    console.log('iframe loaded - submission complete');
+    document.getElementById('successName').textContent = name + ' - Class ' + allData.class;
     goTo(5);
     btn.disabled = false;
     btn.textContent = 'Submit Entry';
-  }, 4000);
+    setTimeout(function() {
+      try { document.body.removeChild(form); document.body.removeChild(iframe); } catch(e) {}
+    }, 1000);
+  };
 
-  btn.textContent = 'Saving... (4s)';
+  // Timeout fallback - 6 seconds
+  setTimeout(function() {
+    if (done) return;
+    done = true;
+    console.log('Timeout reached - assuming submitted');
+    document.getElementById('successName').textContent = name + ' - Class ' + allData.class;
+    goTo(5);
+    btn.disabled = false;
+    btn.textContent = 'Submit Entry';
+    try { document.body.removeChild(form); document.body.removeChild(iframe); } catch(e) {}
+  }, 6000);
+
+  form.submit();
+  console.log('Form submitted to:', WEB_APP_URL);
 }
 
 function collectAllData() {
