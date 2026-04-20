@@ -15,7 +15,6 @@
     padding-bottom: 40px;
   }
 
-  //
   /* TOP BAR */
   .topbar {
     background: #1a1a2e;
@@ -554,37 +553,31 @@ function buildReview() {
 }
 
 // ✅ PASTE YOUR WEB APP URL HERE (Apps Script → Deploy → Copy Web App URL)
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxp0t5GJYyA64qfy0os7Id7i3KvCnin1NbToLEcoTadjhfEk-XCcpEjKeAPkULefaFfqA/exec';
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbz_BCqLxQTd_2Jedd4wV5DiOB6Cx2JWnkkWgNjQtWVuxTZTta4-qMA6qquyzvEtJZ7KwA/exec';
 
 function submitData() {
-  if (!WEB_APP_URL || WEB_APP_URL === 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
-    alert('Please open Teacher_Portal.html in Notepad and paste your Google Apps Script URL into the WEB_APP_URL variable at the top of the script section.');
-    return;
-  }
-
   const name = document.getElementById('stuName').value || 'Student';
   const btn = document.querySelector('#screen4 .btn-primary');
   btn.disabled = true;
   btn.textContent = 'Submitting...';
 
+  // URLSearchParams works with no-cors - Apps Script reads e.parameter.data
+  const formData = new URLSearchParams();
+  formData.append('data', JSON.stringify(collectAllData()));
+
   fetch(WEB_APP_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(collectAllData())
+    mode: 'no-cors',
+    body: formData
   })
-  .then(res => res.json())
-  .then(result => {
-    if (result.status === 'ok') {
-      document.getElementById('successName').textContent = name + ' — Class ' + selectedClass;
-      goTo(5);
-    } else {
-      alert('Server error: ' + (result.msg || 'Unknown error. Check Apps Script logs.'));
-      btn.disabled = false;
-      btn.textContent = 'Submit Entry';
-    }
+  .then(() => {
+    document.getElementById('successName').textContent = name + ' - Class ' + selectedClass;
+    goTo(5);
+    btn.disabled = false;
+    btn.textContent = 'Submit Entry';
   })
   .catch(err => {
-    alert('Request failed. Check your internet or the Web App URL.\n\n' + err.message);
+    alert('Request failed. Check your internet connection.\n\n' + err.message);
     console.error(err);
     btn.disabled = false;
     btn.textContent = 'Submit Entry';
