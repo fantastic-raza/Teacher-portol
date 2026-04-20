@@ -552,8 +552,8 @@ function buildReview() {
   `;
 }
 
-// ✅ PASTE YOUR WEB APP URL HERE (Apps Script → Deploy → Copy Web App URL)
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbz_BCqLxQTd_2Jedd4wV5DiOB6Cx2JWnkkWgNjQtWVuxTZTta4-qMA6qquyzvEtJZ7KwA/exec';
+// Apps Script Web App URL
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzBCyNdL1xFXiqIotuvLb78pwFGt2kcgZpMn4g9JGfIsqszKqzzFsYZLz-yfcrFCkGv7A/exec';
 
 function submitData() {
   const name = document.getElementById('stuName').value || 'Student';
@@ -561,27 +561,52 @@ function submitData() {
   btn.disabled = true;
   btn.textContent = 'Submitting...';
 
-  // URLSearchParams works with no-cors - Apps Script reads e.parameter.data
-  const formData = new URLSearchParams();
-  formData.append('data', JSON.stringify(collectAllData()));
+  // Use hidden iframe + form — bypasses CORS 100%, works from any origin
+  const payload = JSON.stringify(collectAllData());
 
-  fetch(WEB_APP_URL, {
-    method: 'POST',
-    mode: 'no-cors',
-    body: formData
-  })
-  .then(() => {
+  // Create hidden iframe
+  const iframe = document.createElement('iframe');
+  iframe.name = 'hidden_iframe';
+  iframe.style.display = 'none';
+  document.body.appendChild(iframe);
+
+  // Create hidden form targeting the iframe
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = WEB_APP_URL;
+  form.target = 'hidden_iframe';
+  form.style.display = 'none';
+
+  const input = document.createElement('input');
+  input.type = 'hidden';
+  input.name = 'data';
+  input.value = payload;
+  form.appendChild(input);
+  document.body.appendChild(form);
+
+  // Submit after iframe loads (success assumed after 4s)
+  iframe.onload = function() {
     document.getElementById('successName').textContent = name + ' - Class ' + selectedClass;
     goTo(5);
     btn.disabled = false;
     btn.textContent = 'Submit Entry';
-  })
-  .catch(err => {
-    alert('Request failed. Check your internet connection.\n\n' + err.message);
-    console.error(err);
-    btn.disabled = false;
-    btn.textContent = 'Submit Entry';
-  });
+    // Cleanup
+    document.body.removeChild(form);
+    document.body.removeChild(iframe);
+  };
+
+  // Fallback timeout in case onload doesn't fire
+  setTimeout(function() {
+    if (btn.disabled) {
+      document.getElementById('successName').textContent = name + ' - Class ' + selectedClass;
+      goTo(5);
+      btn.disabled = false;
+      btn.textContent = 'Submit Entry';
+      try { document.body.removeChild(form); document.body.removeChild(iframe); } catch(e) {}
+    }
+  }, 5000);
+
+  form.submit();
 }
 
 function collectAllData() {
